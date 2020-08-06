@@ -30,6 +30,30 @@ const (
 	StringLiteral                  // 字符串字面量
 )
 
+func (t TokenType) String() string {
+	return [...]string{
+		"Plus",
+		"Minus",
+		"Star",
+		"Slash",
+		"GE",
+		"GT",
+		"EQ",
+		"LE",
+		"LT",
+		"SemiColon",
+		"LeftParen",
+		"RightParen",
+		"Assignment",
+		"If",
+		"Else",
+		"Int",
+		"Identifier",
+		"IntLiteral",
+		"StringLiteral",
+	}[t]
+}
+
 // Token token structure
 type Token struct {
 	tokenType   TokenType

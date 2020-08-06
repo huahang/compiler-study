@@ -7,9 +7,17 @@ import (
 )
 
 func main() {
-	var script string
-	script = "int i = 8"
-	pkg.Tokenize(script, func(token *pkg.Token) {
-		fmt.Printf("Token type: %v, value: %v\n", token.Type(), token.String())
-	})
+	scripts := []string{
+		"int age = 45;",
+		"inta age = 45;",
+		"in age = 45;",
+		"age >= 45;",
+		"age > 45;",
+	}
+	for _, script := range scripts {
+		pkg.Tokenize(script, func(token *pkg.Token) {
+			fmt.Printf("Token: %v %v\n", token.Type().String(), token.String())
+		})
+		fmt.Println("")
+	}
 }
