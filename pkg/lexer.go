@@ -1,19 +1,24 @@
 package pkg
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // LexerState state of this lexer
-type LexerState int
+type lexerState int
 
 const (
-	INIT LexerState = iota
-	INT1
-	INT2
-	INT3
-	NUMBER
-	ALPHA_NUMERIC
+	sInit lexerState = iota
+	sInt1
+	sInt2
+	sInt3
+	sNumberic
+	sAlphaNumeric
+	sGT
+	sLT
+	sEQ
+	sGE
+	sLE
+	sSemi
+	sError
 )
 
 func isAlphabet(c rune) bool {
@@ -26,21 +31,18 @@ func isAlphabet(c rune) bool {
 	return false
 }
 
-func isAlphaNumeric(c rune) bool {
+func isNumberic(c rune) bool {
 	if c >= '0' && c <= '9' {
-		return true
-	}
-	if c >= 'a' && c <= 'z' {
-		return true
-	}
-	if c >= 'A' && c <= 'Z' {
 		return true
 	}
 	return false
 }
 
-func isNumber(c rune) bool {
-	if c >= '0' && c <= '9' {
+func isAlphaNumeric(c rune) bool {
+	if isAlphabet(c) {
+		return true
+	}
+	if isNumberic(c) {
 		return true
 	}
 	return false
@@ -69,48 +71,176 @@ func isNewLine(c rune) bool {
 	return false
 }
 
-// Tokenize tokenize
-func Tokenize(script string, emit func(*Token)) (err error) {
-	state := LexerState(INIT)
-	token := &Token{}
-	for pos, c := range script {
-		if state == INIT {
-			if c == 'i' {
-				state = INT1
-				token.tokenBuffer.WriteRune(c)
-				continue
-			} else if isNumber(c) {
-				state = NUMBER
-				token.tokenBuffer.WriteRune(c)
-				continue
-			} else if isAlphabet(c) {
-				state = ALPHA_NUMERIC
-				token.tokenBuffer.WriteRune(c)
-				continue
-			} else if c == '>' {
-
-			} else if isBlank(c) {
-				continue
-			} else {
-				err = fmt.Errorf("invalid rune %v at %v", c, pos)
-				return err
-			}
-		} else if state == INT1 {
-			if c == 'n' {
-				state = INT2
-				token.tokenBuffer.WriteRune(c)
-				continue
-			} else if isAlphaNumeric(c) {
-				state = ALPHA_NUMERIC
-				token.tokenBuffer.WriteRune(c)
-				continue
-			} else {
-				emit(token)
-				token = &Token{}
-			}
+func initToken(c rune) (token *Token, state lexerState, err error) {
+	if isBlank(c) {
+		token = nil
+		state = sInit
+	} else {
+		token = &Token{}
+		if c == 'i' {
+			token.tokenType = Int
+			token.tokenBuffer.WriteRune(c)
+			state = sInt1
+		} else if isNumberic(c) {
+			token.tokenType = IntLiteral
+			token.tokenBuffer.WriteRune(c)
+			state = sNumberic
+		} else if isAlphabet(c) {
+			token.tokenType = Identifier
+			token.tokenBuffer.WriteRune(c)
+			state = sAlphaNumeric
+		} else if c == '=' {
+			token.tokenType = EQ
+			token.tokenBuffer.WriteRune(c)
+			state = sEQ
+		} else if c == '>' {
+			token.tokenType = GT
+			token.tokenBuffer.WriteRune(c)
+			state = sGT
+		} else if c == '<' {
+			token.tokenType = LT
+			token.tokenBuffer.WriteRune(c)
+			state = sLT
+		} else if c == ';' {
+			token.tokenType = SemiColon
+			token.tokenBuffer.WriteRune(c)
+			state = sSemi
 		} else {
-			err = fmt.Errorf("invalid rune %v at %v", c, pos)
+			token = nil
+			state = sError
+			err = fmt.Errorf("Invalid rune: %v", c)
 		}
 	}
-	return nil
+	return token, state, err
+}
+
+// Tokenize tokenize
+func Tokenize(script string, emit func(*Token)) (pos int, err error) {
+	var (
+		state        = lexerState(sInit)
+		token *Token = nil
+	)
+	for pos, c := range script {
+		switch state {
+		case sInit:
+			{
+				token, state, err = initToken(c)
+				if err != nil {
+					return pos, err
+				}
+				continue
+			}
+		case sInt1:
+			{
+				if c == 'n' {
+					state = sInt2
+					token.tokenBuffer.WriteRune(c)
+				} else if isAlphaNumeric(c) {
+					state = sAlphaNumeric
+					token.tokenType = Identifier
+					token.tokenBuffer.WriteRune(c)
+				} else {
+					token.tokenType = Identifier
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+				}
+				continue
+			}
+		case sInt2:
+			{
+				if c == 't' {
+					state = sInt3
+					token.tokenBuffer.WriteRune(c)
+				} else if isAlphaNumeric(c) {
+					state = sAlphaNumeric
+					token.tokenType = Identifier
+					token.tokenBuffer.WriteRune(c)
+				} else {
+					token.tokenType = Identifier
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+				}
+				continue
+			}
+		case sInt3:
+			{
+				if isAlphaNumeric(c) {
+					state = sAlphaNumeric
+					token.tokenType = Identifier
+					token.tokenBuffer.WriteRune(c)
+				} else {
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+				}
+				continue
+			}
+		case sAlphaNumeric:
+			{
+				if isAlphaNumeric(c) {
+					token.tokenBuffer.WriteRune(c)
+				} else {
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+				}
+				continue
+			}
+		case sNumberic:
+			{
+				if isNumberic(c) {
+					token.tokenBuffer.WriteRune(c)
+				} else {
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+				}
+				continue
+			}
+		case sGT, sLT:
+			{
+				if c != '=' {
+					emit(token)
+					token, state, err = initToken(c)
+					if err != nil {
+						return pos, err
+					}
+					continue
+				}
+				if state == sGT {
+					token.tokenType = GE
+					state = sGE
+				}
+				if state == sLT {
+					token.tokenType = LE
+					state = sLE
+				}
+				token.tokenBuffer.WriteRune(c)
+			}
+		case sEQ, sGE, sLE, sSemi:
+			{
+				emit(token)
+				token, state, err = initToken(c)
+				if err != nil {
+					return pos, err
+				}
+			}
+		}
+	}
+	if token != nil {
+		emit(token)
+	}
+	return -1, nil
 }
